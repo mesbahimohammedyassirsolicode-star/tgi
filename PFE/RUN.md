@@ -172,15 +172,16 @@ php artisan tinker
 ```
 
 ```php
-$user = \App\Models\User::create([
-    'name' => 'Admin',
-    'email' => 'admin@gims.ma',
-    'password' => bcrypt('Password123'),
-    'role' => 'admin',
-    'is_active' => true,
-]);
+$user = \App\Models\User::firstOrCreate(
+    ['email' => 'admin@gims.ma'],
+    ['name' => 'Admin', 'password' => 'Password123', 'role' => 'admin', 'is_active' => true]
+);
+$user->password = 'Password123';
+$user->save();
 $role = \App\Models\Role::where('slug', 'directeur')->first();
-if ($role) $user->roles()->attach($role->id);
+if ($role && !$user->roles()->where('roles.id', $role->id)->exists()) {
+    $user->roles()->attach($role->id);
+}
 exit
 ```
 

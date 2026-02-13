@@ -5,6 +5,9 @@
 @tailwind utilities;
 
 @layer base {
+  html, body, #root {
+    height: 100%;
+  }
   body {
     @apply font-sans antialiased text-gray-900 bg-gray-50;
   }
