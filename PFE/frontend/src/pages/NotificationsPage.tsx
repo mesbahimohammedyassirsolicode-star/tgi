@@ -1,0 +1,39 @@
+import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { notificationsApi } from '../services/api/notifications';
+import { Card, CardContent, CardHeader } from '../components/ui/card';
+import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+export default function NotificationsPage() {
+  const { t } = useTranslation();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => notificationsApi.list({ per_page: 20 }),
+  });
+
+  if (error) toast.error('Erreur chargement des notifications');
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-gray-900">{t('nav.notifications')}</h1>
+      {isLoading ? (
+        <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary-600" /></div>
+      ) : (
+        <div className="space-y-3">
+          {data?.items?.length ? data.items.map((n) => (
+            <Card key={n.id} className={n.read_at ? 'opacity-75' : ''}>
+              <CardHeader className="pb-2">
+                <p className="font-medium">{n.title}</p>
+                <p className="text-xs text-gray-500">{n.created_at}</p>
+              </CardHeader>
+              <CardContent className="text-sm text-gray-600">{n.message}</CardContent>
+            </Card>
+          )) : (
+            <p className="text-gray-500">Aucune notification.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
