@@ -6,20 +6,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 export default function AffectationGradesPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const affectationId = Number(id);
 
   const { data: affectation } = useQuery({
-    queryKey: ['affectations', affectationId],
+    queryKey: ['affectations', user?.id, user?.role, affectationId],
     queryFn: () => affectationsApi.get(affectationId),
     enabled: !!affectationId,
   });
 
   const { data: summary, isLoading, error } = useQuery({
-    queryKey: ['grades-summary', affectationId],
+    queryKey: ['grades-summary', user?.id, user?.role, affectationId],
     queryFn: () => gradesSummaryApi.summaryByAffectation(affectationId),
     enabled: !!affectationId,
   });

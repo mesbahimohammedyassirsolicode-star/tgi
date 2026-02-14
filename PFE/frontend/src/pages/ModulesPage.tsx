@@ -5,12 +5,14 @@ import { modulesApi } from '../services/api/modules';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 export default function ModulesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['modules'],
+    queryKey: ['modules', user?.id, user?.role],
     queryFn: () => modulesApi.list(),
   });
 

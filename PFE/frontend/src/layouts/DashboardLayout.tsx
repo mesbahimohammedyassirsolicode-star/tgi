@@ -22,6 +22,7 @@ const navItems: { label: string; icon: typeof Home; href: string; roles?: string
   { label: 'Utilisateurs', icon: Users, href: '/users', roles: ['admin'] },
   { label: 'Années scolaires', icon: Calendar, href: '/academic/years', roles: ['admin'] },
   { label: 'Filières', icon: BookOpen, href: '/academic/filieres', roles: ['admin'] },
+  { label: 'Affectation formateurs', icon: ClipboardList, href: '/formateur-assignments', roles: ['admin'] },
   { label: 'Groupes', icon: Users, href: '/groups' },
   { label: 'Modules', icon: BookOpen, href: '/modules' },
   { label: 'Affectations', icon: ClipboardList, href: '/affectations', roles: ['admin', 'formateur'] },

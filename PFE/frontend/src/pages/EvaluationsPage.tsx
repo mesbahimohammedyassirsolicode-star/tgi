@@ -4,11 +4,13 @@ import { evaluationsApi } from '../services/api/evaluations';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 export default function EvaluationsPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['evaluations'],
+    queryKey: ['evaluations', user?.id, user?.role],
     queryFn: () => evaluationsApi.list({ per_page: 20 }),
   });
 

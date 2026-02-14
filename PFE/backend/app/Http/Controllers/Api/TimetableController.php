@@ -51,19 +51,14 @@ class TimetableController extends BaseApiController
             ->orderBy('date')
             ->orderBy('start_time');
 
-        if ($user->role === 'stagiaire') {
-            $user->loadMissing('stagiaire.groupes');
-            $stagiaire = $user->stagiaire;
-            if (! $stagiaire || ! $stagiaire->filiere_id) {
+        if ($this->isStudentRole($user->role)) {
+            [$filiereId, $groupeIds] = $this->resolveStudentScope($request);
+            if ($filiereId === null || $groupeIds->isEmpty()) {
                 return $this->success($this->emptyPayload($start, $end));
             }
-            $groupeIds = $stagiaire->groupes()->pluck('groupes.id')->filter()->values();
-            if ($groupeIds->isEmpty() && $stagiaire->groupe_id) {
-                $groupeIds = collect([$stagiaire->groupe_id]);
-            }
 
-            $query->where(function ($q) use ($stagiaire, $groupeIds) {
-                $q->where('seances.filiere_id', $stagiaire->filiere_id);
+            $query->where(function ($q) use ($filiereId, $groupeIds) {
+                $q->where('seances.filiere_id', $filiereId);
                 if ($groupeIds->isNotEmpty()) {
                     $q->where(function ($q2) use ($groupeIds) {
                         $q2->whereIn('seances.groupe_id', $groupeIds)
@@ -101,7 +96,7 @@ class TimetableController extends BaseApiController
             return $d >= $startStr && $d <= $endStr;
         });
 
-        if ($user->role === 'stagiaire' && $seancesForWeek->isEmpty() && $allForScope->isNotEmpty()) {
+        if ($this->isStudentRole($user->role) && $seancesForWeek->isEmpty() && $allForScope->isNotEmpty()) {
             $firstDate = $allForScope->min('date');
             if ($firstDate) {
                 $d = is_object($firstDate) ? Carbon::parse($firstDate) : Carbon::parse($firstDate);
@@ -130,5 +125,39 @@ class TimetableController extends BaseApiController
             'seances' => $seancesForWeek->values()->all(),
             'by_date' => $byDate,
         ]);
+    }
+
+    private function isStudentRole(?string $role): bool
+    {
+        return in_array(strtolower((string) $role), ['stagiaire', 'student', 'stagiair'], true);
+    }
+
+    /**
+     * @return array{0:?int,1:\Illuminate\Support\Collection}
+     */
+    private function resolveStudentScope(Request $request): array
+    {
+        $user = $request->user();
+        if (! $user) {
+            return [null, collect()];
+        }
+
+        $user->loadMissing('stagiaire.groupes');
+        $stagiaire = $user->stagiaire;
+        if (! $stagiaire) {
+            return [null, collect()];
+        }
+
+        $filiereId = $stagiaire->getFiliereIdForScope();
+        if ($filiereId === null) {
+            return [null, collect()];
+        }
+
+        $groupeIds = $stagiaire->getGroupeIdsInFiliere($filiereId);
+        if ($groupeIds->isEmpty() && $stagiaire->groupe_id) {
+            $groupeIds = collect([(int) $stagiaire->groupe_id]);
+        }
+
+        return [(int) $filiereId, $groupeIds->map(fn ($id) => (int) $id)->unique()->values()];
     }
 }

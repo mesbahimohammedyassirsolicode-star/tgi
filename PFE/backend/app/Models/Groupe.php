@@ -33,4 +33,11 @@ class Groupe extends Model
     {
         return $this->hasMany(Seance::class, 'groupe_id');
     }
+
+    public function modules()
+    {
+        return $this->belongsToMany(Module::class, 'module_groupe', 'groupe_id', 'module_id')
+            ->withPivot(['academic_year', 'semester', 'planned_hours'])
+            ->withTimestamps();
+    }
 }

@@ -6,15 +6,17 @@ import { Button } from '../components/ui/button';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 export default function SeanceRollCallPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [localStatus, setLocalStatus] = useState<Record<number, string>>({});
 
   const { data: rollCall, isLoading, error } = useQuery({
-    queryKey: ['seances', id, 'roll-call'],
+    queryKey: ['seances', user?.id, user?.role, id, 'roll-call'],
     queryFn: () => seancesApi.getRollCall(Number(id)),
     enabled: !!id,
   });
@@ -24,7 +26,7 @@ export default function SeanceRollCallPage() {
       seancesApi.submitRollCall(Number(id), attendances),
     onSuccess: () => {
       toast.success('Présences enregistrées.');
-      qc.invalidateQueries({ queryKey: ['seances', id, 'roll-call'] });
+      qc.invalidateQueries({ queryKey: ['seances', user?.id, user?.role, id, 'roll-call'] });
     },
     onError: () => toast.error('Erreur enregistrement.'),
   });

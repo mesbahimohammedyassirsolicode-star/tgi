@@ -4,11 +4,13 @@ import { academicStructureApi } from '../../services/api/academicStructure';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../../context/AuthContext';
 
 export default function FilieresPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['academic', 'filieres'],
+    queryKey: ['academic', 'filieres', user?.id, user?.role],
     queryFn: () => academicStructureApi.getFilieres(),
   });
 

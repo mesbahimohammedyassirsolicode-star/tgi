@@ -5,12 +5,14 @@ import { parentApi } from '../../services/api/parent';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../../context/AuthContext';
 
 export default function ParentChildrenPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['parent', 'children'],
+    queryKey: ['parent', 'children', user?.id, user?.role],
     queryFn: parentApi.getChildren,
   });
 

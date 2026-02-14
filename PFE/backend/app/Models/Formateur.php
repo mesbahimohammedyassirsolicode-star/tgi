@@ -21,4 +21,16 @@ class Formateur extends Model
     {
         return $this->hasMany(Affectation::class);
     }
+
+    public function modules()
+    {
+        return $this->belongsToMany(Module::class, 'teacher_module', 'teacher_id', 'module_id')
+            ->withPivot(['academic_year', 'semester', 'weekly_hours'])
+            ->withTimestamps();
+    }
+
+    public function modulesWithGroupesAndFilieres()
+    {
+        return $this->modules()->with(['groupes.filiere']);
+    }
 }

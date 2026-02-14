@@ -6,14 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 export default function GroupDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const groupId = id ? parseInt(id, 10) : NaN;
   const isValidId = !isNaN(groupId) && groupId > 0;
   const { data, isLoading, error } = useQuery({
-    queryKey: ['groups', groupId],
+    queryKey: ['groups', user?.id, user?.role, groupId],
     queryFn: () => groupsApi.get(groupId),
     enabled: isValidId,
   });

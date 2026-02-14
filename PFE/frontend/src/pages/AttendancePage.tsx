@@ -7,15 +7,17 @@ import { Button } from '../components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function AttendancePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [dateFrom] = useState(() => new Date().toISOString().slice(0, 10));
   const [dateTo] = useState(() => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['seances', dateFrom, dateTo],
+    queryKey: ['seances', user?.id, user?.role, dateFrom, dateTo],
     queryFn: () => seancesApi.list({ start_date: dateFrom, end_date: dateTo, per_page: 30 }),
   });
 

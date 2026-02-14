@@ -1,19 +1,26 @@
 import axios from 'axios';
 
+const baseURL = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/$/, '') + '/v1';
+
 const api = axios.create({
-    baseURL: (import.meta.env.VITE_API_URL || 'http://localhost:8000/api') + '/v1',
+    baseURL,
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
     },
-    withCredentials: true, // Important for Sanctum cookie-based auth if used, or just CORS
+    withCredentials: true,
 });
 
-// Request interceptor to add token
+// Request interceptor: set Authorization so every request sends the token
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem('token');
+    if (!config.headers) {
+        config.headers = {} as typeof config.headers;
+    }
     if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers['Authorization'] = `Bearer ${token}`;
+    } else {
+        delete config.headers['Authorization'];
     }
     return config;
 });
@@ -33,3 +40,4 @@ api.interceptors.response.use(
 );
 
 export default api;
+

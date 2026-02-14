@@ -4,11 +4,13 @@ import { stagesApi } from '../services/api/stages';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 export default function StagesPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['stages'],
+    queryKey: ['stages', user?.id, user?.role],
     queryFn: () => stagesApi.list({ per_page: 20 }),
   });
 

@@ -26,14 +26,14 @@ export default function TimetablePage() {
   });
 
   const { data: groupsData } = useQuery({
-    queryKey: ['groups'],
+    queryKey: ['groups', user?.id, user?.role],
     queryFn: () => groupsApi.list({ per_page: 50 }),
     enabled: !isStudent,
   });
   const groups = Array.isArray(groupsData?.items) ? groupsData.items : [];
 
   const { data: timetable, isLoading, error, isError } = useQuery({
-    queryKey: ['timetable', isStudent ? 'my' : groupeId, weekStart],
+    queryKey: ['timetable', user?.id, user?.role, isStudent ? 'my' : groupeId, weekStart],
     queryFn: () =>
       timetableApi.get(
         isStudent ? { week_start: weekStart } : { groupe_id: groupeId || undefined, week_start: weekStart }

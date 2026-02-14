@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -11,6 +12,7 @@ import { groupsApi } from '../services/api/groups';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Plus, Trash2, Search, Pencil } from 'lucide-react';
 import Modal from '../components/ui/modal';
+import { useAuth } from '../context/AuthContext';
 
 // Define base user schema
 const baseSchema = z.object({
@@ -24,22 +26,35 @@ const baseSchema = z.object({
 // For simplicity, we'll check conditionally in the form logic or create separate schemas.
 // Let's create a unified schema with optional fields that become required based on role.
 
+// Helper: preprocess empty strings to undefined so .optional() works with HTML selects
+const emptyToUndefined = (val: unknown) => (val === '' || val === null ? undefined : val);
+const emptyStringToUndefined = z.preprocess(emptyToUndefined, z.string().optional());
+const optionalEnum = <T extends [string, ...string[]]>(values: T) =>
+    z.preprocess(emptyToUndefined, z.enum(values).optional());
+const optionalNumeric = z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : Number(val)),
+    z.number().optional()
+);
+
 const userSchema = baseSchema.extend({
     // Formateur
     matricule: z.string().optional(),
     specialty: z.string().optional(),
-    type: z.enum(['permanent', 'vacataire']).optional(),
-    hourly_rate: z.coerce.number().optional(),
+    type: optionalEnum(['permanent', 'vacataire']),
+    hourly_rate: z.preprocess(
+        (val) => (val === '' || val === null || val === undefined ? undefined : Number(val)),
+        z.number().optional()
+    ),
 
     // Stagiaire
-    cin: z.string().regex(/^[A-Z]{2}\d{6}$/i, "CIN: 2 lettres + 6 chiffres (ex: AB123456)").optional(),
+    cin: z.string().optional(),
     cef_number: z.string().optional(),
-    date_naissance: z.string().optional(),
-    niveau_scolaire: z.enum(['COLLEGE', 'BAC', 'BAC+2', 'BAC+3', 'MASTER']).optional(),
-    niveau_formation: z.enum(['Q', 'T', 'TS', 'BACHELOR', 'MASTER']).optional(),
-    filiere_id: z.union([z.number(), z.string().transform(Number)]).optional(),
-    groupe_id: z.union([z.number(), z.string().transform(Number)]).optional(),
-    status: z.enum(['actif', 'abandon', 'exclu', 'diplome']).optional(),
+    date_naissance: emptyStringToUndefined,
+    niveau_scolaire: optionalEnum(['COLLEGE', 'BAC', 'BAC+2', 'BAC+3', 'MASTER']),
+    niveau_formation: optionalEnum(['Q', 'T', 'TS', 'BACHELOR', 'MASTER']),
+    filiere_id: optionalNumeric,
+    groupe_id: optionalNumeric,
+    status: optionalEnum(['actif', 'abandon', 'exclu', 'diplome']),
 
     // Parent
     phone: z.string().optional(),
@@ -55,6 +70,7 @@ const userSchema = baseSchema.extend({
     }
     if (data.role === 'stagiaire') {
         if (!data.cin) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "CIN requis (2 lettres + 6 chiffres)", path: ['cin'] });
+        else if (!/^[A-Z]{2}\d{6}$/i.test(data.cin)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "CIN: 2 lettres + 6 chiffres (ex: AB123456)", path: ['cin'] });
         if (!data.cef_number) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "CEF requis", path: ['cef_number'] });
         if (!data.date_naissance) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Date naissance requise", path: ['date_naissance'] });
         if (!data.niveau_scolaire) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Niveau scolaire requis", path: ['niveau_scolaire'] });
@@ -77,12 +93,14 @@ const userSchema = baseSchema.extend({
     }
     if (data.role === 'parent') {
         if (!data.cin) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "CIN requis", path: ['cin'] });
+        if (!data.phone) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Téléphone requis", path: ['phone'] });
     }
 });
 
 type UserFormValues = z.infer<typeof userSchema>;
 
 export default function UsersPage() {
+    const { user } = useAuth();
     const [roleFilter, setRoleFilter] = useState<string>('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -98,15 +116,15 @@ export default function UsersPage() {
 
     const selectedRole = watch('role');
     const filiereId = watch('filiere_id');
-    const filiereIdForGroups = filiereId !== undefined && filiereId !== '' ? Number(filiereId) : undefined;
+    const filiereIdForGroups = filiereId !== undefined && filiereId !== 0 ? Number(filiereId) : undefined;
 
-    const { data: usersData, isLoading: isUsersLoading, error } = useUsers(roleFilter || undefined);
+    const { data: usersData, isLoading: isUsersLoading, error } = useUsers(roleFilter || undefined, user?.id, user?.role);
     const { data: filieres = [] } = useQuery({
-        queryKey: ['academic', 'filieres'],
+        queryKey: ['academic', 'filieres', user?.id, user?.role],
         queryFn: () => academicStructureApi.getFilieres(),
     });
     const { data: groupesByFiliere, isLoading: isLoadingGroupes } = useQuery({
-        queryKey: ['groups', 'by-filiere', filiereIdForGroups],
+        queryKey: ['groups', 'by-filiere', user?.id, user?.role, filiereIdForGroups],
         queryFn: () => groupsApi.list({ filiere_id: filiereIdForGroups!, per_page: 100 }),
         enabled: selectedRole === 'stagiaire' && !!filiereIdForGroups,
     });
@@ -116,30 +134,75 @@ export default function UsersPage() {
     const deleteUser = useDeleteUser();
 
     useEffect(() => {
-        if (selectedRole === 'stagiaire' && (filiereId === '' || filiereId === undefined)) {
-            setValue('groupe_id', '');
+        if (selectedRole === 'stagiaire' && (filiereId === 0 || filiereId === undefined)) {
+            setValue('groupe_id', undefined);
         }
     }, [filiereId, selectedRole, setValue]);
 
     const buildPayload = (data: UserFormValues, forEdit = false) => {
         const payload = { ...data } as any;
+        // Clean up fields not relevant to the selected role
+        const stagiairOnlyFields = ['cin', 'cef_number', 'date_naissance', 'niveau_scolaire', 'niveau_formation', 'filiere_id', 'groupe_id', 'status'];
+        const formateurOnlyFields = ['matricule', 'specialty', 'type', 'hourly_rate'];
+
         if (data.role === 'stagiaire') {
-            if (data.filiere_id !== undefined && data.filiere_id !== '') payload.filiere_id = Number(data.filiere_id);
-            if (data.groupe_id !== undefined && data.groupe_id !== '') payload.groupe_id = Number(data.groupe_id);
-        }
-        if (data.role === 'formateur' || data.role === 'teacher') {
+            if (data.filiere_id !== undefined && data.filiere_id !== 0) payload.filiere_id = Number(data.filiere_id);
+            if (data.groupe_id !== undefined && data.groupe_id !== 0) payload.groupe_id = Number(data.groupe_id);
+            // Remove fields not for stagiaire
+            formateurOnlyFields.forEach(f => delete payload[f]);
+        } else if (data.role === 'formateur' || data.role === 'teacher') {
             payload.type = payload.type || 'permanent';
+            payload.specialty = payload.specialty || payload.specialite || '';
+            payload.specialite = payload.specialty; // backend expects specialite
             const rate = payload.hourly_rate;
             if (rate === '' || rate === undefined || Number.isNaN(Number(rate))) {
                 delete payload.hourly_rate;
             } else {
                 payload.hourly_rate = Number(rate);
             }
-            delete payload.filiere_id;
-            delete payload.groupe_id;
+            // Remove fields not for formateur
+            stagiairOnlyFields.forEach((f: string) => delete payload[f]);
+            delete payload.cin;
+            delete payload.phone;
+            delete payload.address;
+            delete payload.poste;
+        } else if (data.role === 'parent') {
+            // Remove fields not for parent
+            stagiairOnlyFields.filter(f => f !== 'cin').forEach(f => delete payload[f]);
+            formateurOnlyFields.forEach(f => delete payload[f]);
+            delete payload.poste;
+        } else if (data.role === 'admin') {
+            // Remove fields not for admin
+            stagiairOnlyFields.forEach(f => delete payload[f]);
+            formateurOnlyFields.forEach(f => delete payload[f]);
+            delete payload.cin;
+            delete payload.address;
         }
         if (forEdit && !payload.password) delete payload.password;
         return payload;
+    };
+
+    const handleApiError = (err: any, setErrorFn: (field: keyof UserFormValues, opts: { type: string; message: string }) => void) => {
+        const status = err?.response?.status;
+        const data = err?.response?.data;
+        const apiErrors = data?.errors;
+        const msg = data?.message;
+        if (status === 403) {
+            toast.error(msg || 'Accès refusé.');
+            return;
+        }
+        if (apiErrors && typeof apiErrors === 'object') {
+            Object.entries(apiErrors).forEach(([field, messages]) => {
+                const m = Array.isArray(messages) ? messages[0] : String(messages);
+                if (m) {
+                    const formField = (field === 'specialite' ? 'specialty' : field) as keyof UserFormValues;
+                    setErrorFn(formField, { type: 'server', message: m });
+                }
+            });
+            toast.error('Veuillez corriger les erreurs dans le formulaire.');
+        } else {
+            toast.error(msg || 'Une erreur est survenue.');
+        }
     };
 
     const onSubmit = (data: UserFormValues) => {
@@ -153,35 +216,25 @@ export default function UsersPage() {
                 { id: editingUser.id, data: payload },
                 {
                     onSuccess: () => {
+                        toast.success('Utilisateur modifié.');
                         setEditingUser(null);
                         setIsModalOpen(false);
                         reset();
                     },
                     onError: (err: any) => {
-                        const apiErrors = err?.response?.data?.errors;
-                        if (apiErrors && typeof apiErrors === 'object') {
-                            Object.entries(apiErrors).forEach(([field, messages]) => {
-                                const msg = Array.isArray(messages) ? messages[0] : String(messages);
-                                if (msg) setError(field as keyof UserFormValues, { type: 'server', message: msg });
-                            });
-                        }
+                        handleApiError(err, setError);
                     }
                 }
             );
         } else {
             createUser.mutate(payload, {
                 onSuccess: () => {
+                    toast.success('Utilisateur créé.');
                     setIsModalOpen(false);
                     reset();
                 },
                 onError: (err: any) => {
-                    const apiErrors = err?.response?.data?.errors;
-                    if (apiErrors && typeof apiErrors === 'object') {
-                        Object.entries(apiErrors).forEach(([field, messages]) => {
-                            const msg = Array.isArray(messages) ? messages[0] : String(messages);
-                            if (msg) setError(field as keyof UserFormValues, { type: 'server', message: msg });
-                        });
-                    }
+                    handleApiError(err, setError);
                 }
             });
         }
@@ -273,9 +326,9 @@ export default function UsersPage() {
                                     <td className="p-4 text-gray-500">{user.email}</td>
                                     <td className="p-4 capitalize">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                                                user.role === 'formateur' ? 'bg-blue-100 text-blue-800' :
-                                                    user.role === 'stagiaire' ? 'bg-green-100 text-green-800' :
-                                                        'bg-gray-100 text-gray-800'
+                                            user.role === 'formateur' ? 'bg-blue-100 text-blue-800' :
+                                                user.role === 'stagiaire' ? 'bg-green-100 text-green-800' :
+                                                    'bg-gray-100 text-gray-800'
                                             }`}>
                                             {user.role}
                                         </span>
@@ -332,7 +385,6 @@ export default function UsersPage() {
                         >
                             <option value="stagiaire">Stagiaire</option>
                             <option value="formateur">Formateur (enseignant)</option>
-                            <option value="teacher">Teacher</option>
                             <option value="parent">Parent</option>
                             <option value="admin">Administrateur</option>
                         </select>

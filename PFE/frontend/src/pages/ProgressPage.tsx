@@ -10,7 +10,7 @@ export default function ProgressPage() {
   const stagiaireId = user?.stagiaire?.id ?? user?.stagiaire?.id;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['progress', stagiaireId],
+    queryKey: ['progress', user?.id, user?.role, stagiaireId],
     queryFn: () => progressApi.get(stagiaireId!),
     enabled: !!stagiaireId,
   });

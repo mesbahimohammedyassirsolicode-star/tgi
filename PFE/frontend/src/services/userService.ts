@@ -14,14 +14,15 @@ export const userService = {
     getAll: async (role?: string) => {
         const params = role ? { role } : {};
         const { data } = await api.get<{ data: User[] }>('/users', { params });
-        return data; // standard laravel paginate response wrapper? or just array? Backend returns paginate object.
+        // Backend now returns success($paginator), so it's { data: { data: User[], ... } }
+        return (data as any)?.data ?? data;
         // Backend: return $query->latest()->paginate(20);
         // So data structure is { data: User[], links: ..., meta: ... }
     },
 
     create: async (payload: CreateUserPayload) => {
-        const { data } = await api.post<User>('/users', payload);
-        return data;
+        const res = await api.post<{ message?: string; data?: User }>('/users', payload);
+        return (res.data as any)?.data ?? res.data;
     },
 
     update: async (id: number, payload: Partial<CreateUserPayload>) => {

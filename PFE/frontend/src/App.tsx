@@ -22,6 +22,7 @@ import GroupAttendanceRiskPage from './pages/GroupAttendanceRiskPage';
 import TimetablePage from './pages/TimetablePage';
 import AffectationGradesPage from './pages/AffectationGradesPage';
 import ProgressPage from './pages/ProgressPage';
+import FormateurAssignmentsPage from './pages/FormateurAssignmentsPage';
 import { Loader2 } from 'lucide-react';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/users" element={<UsersPage />} />
         <Route path="/academic/years" element={<AcademicYearsPage />} />
         <Route path="/academic/filieres" element={<FilieresPage />} />
+        <Route path="/formateur-assignments" element={<FormateurAssignmentsPage />} />
 
         {/* General */}
         <Route path="/groups" element={<GroupsPage />} />

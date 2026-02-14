@@ -6,12 +6,14 @@ import { groupsApi } from '../services/api/groups';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 export default function GroupsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['groups'],
+    queryKey: ['groups', user?.id, user?.role],
     queryFn: () => groupsApi.list({ per_page: 20 }),
   });
 

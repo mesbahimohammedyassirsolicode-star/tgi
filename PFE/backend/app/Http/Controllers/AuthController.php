@@ -20,6 +20,9 @@ class AuthController extends Controller
         }
 
         $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return $this->error('Utilisateur non trouvé.', 404);
+        }
 
         if (! $user->is_active) {
             Auth::logout();
@@ -61,12 +64,17 @@ class AuthController extends Controller
 
     private function loadUserProfile(User $user): void
     {
-        match ($user->role) {
-            'admin' => $user->load('administrator'),
-            'formateur' => $user->load('formateur'),
-            'stagiaire' => $user->load('stagiaire.filiere', 'stagiaire.groupe'),
-            'parent' => $user->load('parent'),
-            default => null,
-        };
+        try {
+            $role = strtolower((string) $user->role);
+            match ($role) {
+                'admin' => $user->loadMissing('administrator'),
+                'formateur', 'teacher' => $user->loadMissing('formateur'),
+                'stagiaire', 'student', 'stagiair' => $user->loadMissing('stagiaire.filiere', 'stagiaire.groupes'),
+                'parent' => $user->loadMissing('parent'),
+                default => null,
+            };
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }

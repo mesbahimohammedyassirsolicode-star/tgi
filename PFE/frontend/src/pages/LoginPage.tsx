@@ -43,7 +43,8 @@ export default function LoginPage() {
             if (!msg && err.code === 'ERR_NETWORK') {
                 msg = 'Impossible de joindre le serveur. Vérifiez que l\'API tourne et CORS.';
             }
-            setError(msg ?? 'Une erreur est survenue lors de la connexion.');
+            const finalMsg = msg || err.message || 'Une erreur est survenue lors de la connexion.';
+            setError(finalMsg);
         } finally {
             setIsLoading(false);
         }

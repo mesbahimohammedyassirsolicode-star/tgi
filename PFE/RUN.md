@@ -219,3 +219,45 @@ exit
 ```
 
 Then log in in the frontend with `admin@gims.ma` / `Password123` (password must match the policy: 8+ chars, letter + number).
+
+---
+
+## 6. Testing user creation (Teacher / Admin)
+
+See `backend/docs/USER_CREATION_API.md` for curl and Postman examples. Quick test:
+
+```bash
+# 1. Login to get token (copy "token" from response)
+# curl -X POST "http://localhost:8000/api/v1/login" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"email\":\"admin@gims.ma\",\"password\":\"Password123\"}"
+
+# 2. Create teacher (replace YOUR_TOKEN with the token from step 1)
+# curl -X POST "http://localhost:8000/api/v1/users" -H "Authorization: Bearer YOUR_TOKEN" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\":\"Test Formateur\",\"email\":\"formateur1@gims.ma\",\"password\":\"Password123\",\"role\":\"formateur\",\"matricule\":\"F99999\",\"specialty\":\"Informatique\",\"type\":\"permanent\"}"
+```
+
+See `backend/docs/USER_CREATION_API.md` for full examples and Postman-ready JSON.
+
+---
+
+## 7. Emergency debug: is the backend reached? Is the token sent?
+
+**1. Backend reachable (no auth):**  
+Open in browser or curl:
+
+```text
+GET http://localhost:8000/api/v1/debug-ping
+```
+
+Expected: `{"ok":true,"message":"Backend reached","ts":"..."}`  
+If you get nothing or connection refused → wrong host/port or backend not running.
+
+**2. Token sent and Sanctum OK:**  
+After logging in, open (with the app’s token in localStorage) or use curl with the token:
+
+```text
+GET http://localhost:8000/api/v1/debug-auth
+Header: Authorization: Bearer YOUR_TOKEN
+```
+
+Expected: `{"ok":true,"user_id":1,"user_role":"admin"}`  
+If 401 → token missing, wrong, or Sanctum blocking.  
+If 200 → backend is reached and auth works; next check is role middleware on `/users`.

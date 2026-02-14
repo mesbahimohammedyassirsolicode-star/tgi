@@ -3,9 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Groupe;
-use App\Models\Stagiaire;
-use App\Models\Module;
-use App\Models\AnneeScolaire;
 use Illuminate\Http\Request;
 
 class GroupController extends Controller
@@ -20,11 +17,12 @@ class GroupController extends Controller
     {
         $query = Groupe::with(['filiere', 'anneeScolaire']);
 
-        if ($request->user()?->role === 'stagiaire') {
-            $request->user()->loadMissing('stagiaire');
-            $filiereId = $request->user()->stagiaire?->filiere_id;
-            if ($filiereId) {
-                $query->where('filiere_id', $filiereId);
+        if ($this->isStudentRole($request->user()?->role)) {
+            [, $groupeIds] = $this->resolveStudentScope($request);
+            if ($groupeIds->isEmpty()) {
+                $query->whereRaw('0 = 1');
+            } else {
+                $query->whereIn('id', $groupeIds);
             }
         } elseif ($request->filled('filiere_id')) {
             $query->where('filiere_id', (int) $request->filiere_id);
@@ -57,7 +55,7 @@ class GroupController extends Controller
             'annee_scolaire_id' => 'required|exists:annees_scolaires,id',
             'label' => 'required|string|max:50',
             'year_level' => 'required|integer|in:1,2',
-            'capacity' => 'integer|min:1'
+            'capacity' => 'integer|min:1',
         ]);
 
         $group = Groupe::create($validated);
@@ -66,11 +64,13 @@ class GroupController extends Controller
 
     public function show(Request $request, Groupe $group)
     {
-        if ($request->user()?->role === 'stagiaire' && $request->user()->stagiaire?->filiere_id) {
-            if ($group->filiere_id !== $request->user()->stagiaire->filiere_id) {
-                abort(403, 'Accès refusé à ce groupe.');
+        if ($this->isStudentRole($request->user()?->role)) {
+            [, $groupeIds] = $this->resolveStudentScope($request);
+            if (! $groupeIds->contains((int) $group->id)) {
+                abort(403, 'Acces refuse a ce groupe.');
             }
         }
+
         return $this->success($group->load(['filiere', 'anneeScolaire', 'stagiaires.user']));
     }
 
@@ -82,7 +82,7 @@ class GroupController extends Controller
         $validated = $request->validate([
             'label' => 'string|max:50',
             'year_level' => 'integer|in:1,2',
-            'capacity' => 'integer|min:1'
+            'capacity' => 'integer|min:1',
         ]);
 
         $group->update($validated);
@@ -105,10 +105,44 @@ class GroupController extends Controller
     {
         $validated = $request->validate([
             'stagiaire_ids' => 'required|array',
-            'stagiaire_ids.*' => 'exists:stagiaires,id'
+            'stagiaire_ids.*' => 'exists:stagiaires,id',
         ]);
 
         $group->stagiaires()->syncWithoutDetaching($validated['stagiaire_ids']);
-        return $this->success(['message' => 'Inscriptions enregistrées.']);
+        return $this->success(['message' => 'Inscriptions enregistrees.']);
+    }
+
+    private function isStudentRole(?string $role): bool
+    {
+        return in_array(strtolower((string) $role), ['stagiaire', 'student', 'stagiair'], true);
+    }
+
+    /**
+     * @return array{0:?int,1:\Illuminate\Support\Collection}
+     */
+    private function resolveStudentScope(Request $request): array
+    {
+        $user = $request->user();
+        if (! $user) {
+            return [null, collect()];
+        }
+
+        $user->loadMissing('stagiaire.groupes');
+        $stagiaire = $user->stagiaire;
+        if (! $stagiaire) {
+            return [null, collect()];
+        }
+
+        $filiereId = $stagiaire->getFiliereIdForScope();
+        if ($filiereId === null) {
+            return [null, collect()];
+        }
+
+        $groupeIds = $stagiaire->getGroupeIdsInFiliere($filiereId);
+        if ($groupeIds->isEmpty() && $stagiaire->groupe_id) {
+            $groupeIds = collect([(int) $stagiaire->groupe_id]);
+        }
+
+        return [(int) $filiereId, $groupeIds->map(fn ($id) => (int) $id)->unique()->values()];
     }
 }

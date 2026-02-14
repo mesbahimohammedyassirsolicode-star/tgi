@@ -4,11 +4,13 @@ import { notificationsApi } from '../services/api/notifications';
 import { Card, CardContent, CardHeader } from '../components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 export default function NotificationsPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['notifications'],
+    queryKey: ['notifications', user?.id, user?.role],
     queryFn: () => notificationsApi.list({ per_page: 20 }),
   });
 

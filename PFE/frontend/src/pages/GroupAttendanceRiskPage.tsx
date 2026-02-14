@@ -7,22 +7,24 @@ import { Button } from '../components/ui/button';
 import { Loader2, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 const THRESHOLD = 80;
 
 export default function GroupAttendanceRiskPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const groupId = Number(id);
 
   const { data: group } = useQuery({
-    queryKey: ['groups', groupId],
+    queryKey: ['groups', user?.id, user?.role, groupId],
     queryFn: () => groupsApi.get(groupId),
     enabled: !!groupId,
   });
 
   const { data: summary, isLoading, error } = useQuery({
-    queryKey: ['attendance-summary', groupId],
+    queryKey: ['attendance-summary', user?.id, user?.role, groupId],
     queryFn: () => attendanceRiskApi.summaryByGroup(groupId, { annee_scolaire_id: group?.annee_scolaire_id }),
     enabled: !!groupId && !!group,
   });

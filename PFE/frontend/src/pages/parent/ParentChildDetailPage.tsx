@@ -5,24 +5,26 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Button } from '../../components/ui/button';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../../context/AuthContext';
 
 export default function ParentChildDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data: children, isLoading, error } = useQuery({
-    queryKey: ['parent', 'children'],
+    queryKey: ['parent', 'children', user?.id, user?.role],
     queryFn: parentApi.getChildren,
   });
   const child = children?.find((c) => c.id === Number(id));
 
   const { data: grades } = useQuery({
-    queryKey: ['parent', 'children', id, 'grades'],
+    queryKey: ['parent', 'children', user?.id, user?.role, id, 'grades'],
     queryFn: () => parentApi.getChildGrades(Number(id)),
     enabled: !!id,
   });
 
   const { data: attendance } = useQuery({
-    queryKey: ['parent', 'children', id, 'attendance'],
+    queryKey: ['parent', 'children', user?.id, user?.role, id, 'attendance'],
     queryFn: () => parentApi.getChildAttendance(Number(id)),
     enabled: !!id,
   });

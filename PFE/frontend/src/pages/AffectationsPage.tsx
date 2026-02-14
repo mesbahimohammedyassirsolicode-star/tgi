@@ -6,12 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 export default function AffectationsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['affectations'],
+    queryKey: ['affectations', user?.id, user?.role],
     queryFn: () => affectationsApi.list(),
   });
 

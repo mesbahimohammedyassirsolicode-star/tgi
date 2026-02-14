@@ -11,7 +11,11 @@ use App\Models\StudentParent; // Renamed because Parent is PHP keyword
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Throwable;
 use App\Rules\CinFormat;
 use App\Rules\OfpptEligibility;
 use App\Rules\PasswordPolicy;
@@ -20,16 +24,34 @@ class UserController extends Controller
 {
     /**
      * Display a listing of the resource.
+     * Eager load role-specific relations only when present; null-safe for stagiaire without filière/groupe.
      */
     public function index(Request $request)
     {
-        $query = User::with(['stagiaire.filiere', 'stagiaire.groupe', 'formateur', 'administrator', 'parent']);
+        try {
+            $query = User::query()
+                ->with([
+                    'stagiaire' => fn ($q) => $q->with(['filiere:id,code,label', 'groupes:id,label,filiere_id']),
+                    'formateur',
+                    'administrator',
+                    'parent',
+                ]);
 
-        if ($request->has('role')) {
-            $query->where('role', $request->role);
+            if ($request->filled('role')) {
+                $query->where('role', $request->role);
+            }
+
+            $paginator = $query->latest()->paginate(20);
+
+            // Return paginator as JSON; relations may be null for users without that role
+            return $this->success($paginator);
+        } catch (Throwable $e) {
+            Log::error('UserController::index failed', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'message' => 'Erreur de chargement des utilisateurs.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
         }
-
-        return $query->latest()->paginate(20);
     }
 
     /**
@@ -39,116 +61,157 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
-        $role = $request->input('role');
-        if (in_array($role, ['formateur', 'teacher'], true)) {
-            $request->merge([
-                'role' => 'formateur',
-                'type' => $request->input('type') ?: 'permanent',
-                'hourly_rate' => $request->filled('hourly_rate') && is_numeric($request->hourly_rate) ? (float) $request->hourly_rate : null,
-            ]);
+        Log::info('DEBUG UserController::store', ['input_role' => $request->input('role')]);
+        $inputRole = strtolower(trim((string) $request->input('role', '')));
+        $normalizedRole = $inputRole;
+        if (str_contains($inputRole, 'teacher') || str_contains($inputRole, 'formateur')) {
+            $normalizedRole = 'teacher';
+        } elseif (str_contains($inputRole, 'student') || str_contains($inputRole, 'stagiaire')) {
+            $normalizedRole = 'student';
+        } elseif (str_contains($inputRole, 'admin')) {
+            $normalizedRole = 'admin';
         }
-        $role = $request->input('role');
 
-        $baseRules = [
+        $request->merge([
+            'role' => $normalizedRole,
+            'specialite' => trim((string) ($request->input('specialite') ?? $request->input('specialty') ?? '')),
+        ]);
+
+        $rules = [
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'email' => 'required|string|email|max:255|unique:users,email',
             'password' => ['required', 'string', new PasswordPolicy()],
-            'role' => 'required|in:admin,formateur,stagiaire,parent',
+            'role' => 'required|in:admin,teacher,student,parent',
             'avatar_url' => 'nullable|string',
         ];
 
-        if ($role === 'formateur') {
-            $baseRules['matricule'] = 'required|string|unique:formateurs,matricule';
-            $baseRules['specialty'] = 'required|string';
-            $baseRules['type'] = 'required|in:permanent,vacataire';
-            $baseRules['hourly_rate'] = 'nullable|numeric';
+        if ($normalizedRole === 'teacher') {
+            $rules['matricule'] = 'required|string|max:50|unique:formateurs,matricule';
+            $rules['specialite'] = 'required|string|max:100';
         }
 
-        if ($role === 'stagiaire') {
-            $baseRules['cin'] = ['required', 'string', new CinFormat(), Rule::unique('stagiaires', 'cin')];
-            $baseRules['cef_number'] = 'required|string|unique:stagiaires,cef_number';
-            $baseRules['date_naissance'] = 'required|date';
-            $baseRules['niveau_scolaire'] = [
+        if ($normalizedRole === 'student') {
+            $rules['cin'] = ['required', 'string', new CinFormat(), Rule::unique('stagiaires', 'cin')];
+            $rules['cef_number'] = 'required|string|unique:stagiaires,cef_number';
+            $rules['date_naissance'] = 'required|date';
+            $rules['niveau_scolaire'] = [
                 'required',
                 'in:COLLEGE,BAC,BAC+2,BAC+3,MASTER',
                 new OfpptEligibility($request->input('niveau_formation')),
             ];
-            $baseRules['niveau_formation'] = 'required|in:Q,T,TS,BACHELOR,MASTER';
-            $baseRules['filiere_id'] = 'required|integer|exists:filieres,id';
-            $baseRules['groupe_id'] = 'required|integer|exists:groupes,id';
-            $baseRules['status'] = 'nullable|in:actif,abandon,exclu,diplome';
+            $rules['niveau_formation'] = 'required|in:Q,T,TS,BACHELOR,MASTER';
+            $rules['filiere_id'] = 'required|integer|exists:filieres,id';
+            $rules['groupe_id'] = 'required|integer|exists:groupes,id';
+            $rules['status'] = 'nullable|in:actif,abandon,exclu,diplome';
         }
 
-        if ($role === 'parent') {
-            $baseRules['cin'] = ['required', 'string', new CinFormat(), Rule::unique('parents', 'cin')];
-            $baseRules['phone'] = 'nullable|string';
-            $baseRules['address'] = 'nullable|string';
+        if ($normalizedRole === 'admin') {
+            $rules['poste'] = 'nullable|string';
+            $rules['phone'] = 'nullable|string';
         }
 
-        if ($role === 'admin') {
-            $baseRules['poste'] = 'nullable|string';
-            $baseRules['phone'] = 'nullable|string';
+        if ($normalizedRole === 'parent') {
+            $rules['cin'] = ['required', 'string', 'max:20', Rule::unique('parents', 'cin')];
+            $rules['phone'] = 'required|string|max:20';
+            $rules['address'] = 'nullable|string';
         }
 
-        $validated = $request->validate($baseRules, [], [
-            'filiere_id' => 'filière',
+        $validator = Validator::make($request->all(), $rules, [], [
+            'filiere_id' => 'filiere',
             'groupe_id' => 'groupe',
+            'specialite' => 'specialite',
         ]);
 
-        if ($role === 'stagiaire') {
-            $groupe = Groupe::where('id', $validated['groupe_id'])->where('filiere_id', $validated['filiere_id'])->first();
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        if ($normalizedRole === 'student') {
+            $groupe = Groupe::where('id', $validated['groupe_id'])
+                ->where('filiere_id', $validated['filiere_id'])
+                ->first();
+
             if (! $groupe) {
                 return response()->json([
-                    'message' => 'Le groupe doit appartenir à la filière sélectionnée.',
-                    'errors' => ['groupe_id' => ['Groupe invalide pour cette filière.']],
+                    'message' => 'Validation failed.',
+                    'errors' => ['groupe_id' => ['Groupe invalide pour cette filiere.']],
                 ], 422);
             }
         }
 
-        return DB::transaction(function () use ($validated) {
-            $user = User::create([
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'password' => Hash::make($validated['password']),
-                'role' => $validated['role'],
-                'avatar_url' => $validated['avatar_url'] ?? null,
-                'is_active' => true,
-            ]);
+        $dbRole = match ($normalizedRole) {
+            'teacher' => 'formateur',
+            'student' => 'stagiaire',
+            default => $normalizedRole,
+        };
 
-            if ($user->role === 'formateur') {
-                $user->formateur()->create([
-                    'matricule' => $validated['matricule'],
-                    'specialty' => $validated['specialty'],
-                    'type' => $validated['type'],
-                    'hourly_rate' => $validated['hourly_rate'] ?? null,
+        try {
+            $user = DB::transaction(function () use ($validated, $normalizedRole, $dbRole) {
+                $createdUser = User::create([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'password' => $validated['password'],
+                    'role' => $dbRole,
+                    'avatar_url' => $validated['avatar_url'] ?? null,
+                    'is_active' => true,
                 ]);
-            } elseif ($user->role === 'stagiaire') {
-                $stagiaire = $user->stagiaire()->create([
-                    'filiere_id' => $validated['filiere_id'],
-                    'groupe_id' => $validated['groupe_id'],
-                    'cin' => strtoupper(trim($validated['cin'])),
-                    'cef_number' => $validated['cef_number'],
-                    'date_naissance' => $validated['date_naissance'],
-                    'niveau_scolaire' => $validated['niveau_scolaire'],
-                    'niveau_formation' => $validated['niveau_formation'],
-                    'status' => $validated['status'] ?? 'actif',
-                ]);
-                $stagiaire->groupes()->syncWithoutDetaching([$validated['groupe_id']]);
-            } elseif ($user->role === 'parent') {
-                $user->parent()->create([
-                    'cin' => $validated['cin'],
-                    'phone' => $validated['phone'] ?? '',
-                    'address' => $validated['address'] ?? '',
-                ]);
-            } elseif ($user->role === 'admin') {
-                $user->administrator()->create([
-                    'poste' => $validated['poste'] ?? 'Administrateur',
-                    'phone' => $validated['phone'] ?? null,
-                ]);
-            }
 
-            return $user->load(['stagiaire.filiere', 'stagiaire.groupe', 'formateur', 'administrator', 'parent']);
-        });
+                if ($normalizedRole === 'student') {
+                    $stagiaire = $createdUser->stagiaire()->create([
+                        'filiere_id' => $validated['filiere_id'],
+                        'groupe_id' => $validated['groupe_id'],
+                        'cin' => strtoupper(trim($validated['cin'])),
+                        'cef_number' => $validated['cef_number'],
+                        'date_naissance' => $validated['date_naissance'],
+                        'niveau_scolaire' => $validated['niveau_scolaire'],
+                        'niveau_formation' => $validated['niveau_formation'],
+                        'status' => $validated['status'] ?? 'actif',
+                    ]);
+                    $stagiaire->groupes()->syncWithoutDetaching([$validated['groupe_id']]);
+                }
+
+                if ($normalizedRole === 'teacher') {
+                    $createdUser->formateur()->create([
+                        'matricule' => $validated['matricule'],
+                        'specialty' => $validated['specialite'],
+                        'type' => 'permanent',
+                        'hourly_rate' => null,
+                    ]);
+                }
+
+                if ($normalizedRole === 'admin') {
+                    $createdUser->administrator()->create([
+                        'poste' => $validated['poste'] ?? 'Administrateur',
+                        'phone' => $validated['phone'] ?? null,
+                    ]);
+                }
+
+                if ($normalizedRole === 'parent') {
+                    $createdUser->parent()->create([
+                        'cin' => strtoupper(trim($validated['cin'])),
+                        'phone' => $validated['phone'],
+                        'address' => $validated['address'] ?? null,
+                    ]);
+                }
+
+                return $createdUser->load(['stagiaire.filiere', 'stagiaire.groupe', 'formateur', 'administrator', 'parent']);
+            });
+
+            return response()->json([
+                'message' => 'User created successfully.',
+                'data' => $user,
+            ], 201);
+        } catch (Throwable $e) {
+            return response()->json([
+                'message' => 'Failed to create user.',
+                'errors' => ['server' => [$e->getMessage()]],
+            ], 500);
+        }
     }
 
     public function update(Request $request, User $user)
@@ -186,9 +249,8 @@ class UserController extends Controller
              'poste' => 'nullable|string',
         ]);
 
-        if (isset($validated['password'])) {
-            $validated['password'] = Hash::make($validated['password']);
-        }
+        // Password hashing is handled by User model's 'hashed' cast — do NOT Hash::make() here
+        // (double-hashing breaks login)
 
         $user->update($validated);
 
@@ -205,8 +267,10 @@ class UserController extends Controller
             }
             if ($request->filled('groupe_id')) {
                 $gid = (int) $request->groupe_id;
-                $stagiaireData['groupe_id'] = $gid;
                 $user->stagiaire->groupes()->syncWithoutDetaching([$gid]);
+                if (Schema::hasColumn('stagiaires', 'groupe_id')) {
+                    $stagiaireData['groupe_id'] = $gid;
+                }
             }
             if ($request->has('cin')) {
                 $stagiaireData['cin'] = strtoupper(trim($request->cin));
@@ -218,7 +282,21 @@ class UserController extends Controller
             $user->administrator()->update($request->only(['poste', 'phone']));
         }
 
-        return $user->load(['stagiaire.filiere', 'stagiaire.groupe', 'formateur', 'administrator', 'parent']);
+        try {
+            $user->load([
+                'stagiaire' => fn ($q) => $q->with(['filiere:id,code,label', 'groupes:id,label,filiere_id']),
+                'formateur',
+                'administrator',
+                'parent',
+            ]);
+            return $this->success($user);
+        } catch (Throwable $e) {
+            Log::error('UserController::update load failed', ['user_id' => $user->id, 'message' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Utilisateur mis à jour mais erreur lors du rechargement des données.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
     }
 
     /**

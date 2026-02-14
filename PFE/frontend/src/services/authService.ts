@@ -2,9 +2,13 @@ import api from '../lib/axios';
 import type { LoginCredentials, AuthResponse, User } from '../types/auth';
 
 /** API v1 returns { data: T }. Unwrap for callers. */
-function unwrap<T>(res: { data?: { data?: T } }): T {
-    const d = res.data?.data ?? res.data;
-    if (d === undefined) throw new Error('Réponse API invalide');
+function unwrap<T>(res: any): T {
+    // Standard Laravel response or our { data: T } wrapper
+    const d = res?.data?.data !== undefined ? res.data.data : res?.data !== undefined ? res.data : undefined;
+    if (d === undefined) {
+        console.error('API Response missing data:', res);
+        throw new Error('Réponse API invalide: données manquantes');
+    }
     return d as T;
 }
 

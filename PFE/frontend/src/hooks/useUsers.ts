@@ -2,9 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userService } from '../services/userService';
 import type { CreateUserPayload } from '../services/userService';
 
-export function useUsers(role?: string) {
+export function useUsers(role?: string, scopeUserId?: number, scopeRole?: string) {
     return useQuery({
-        queryKey: ['users', role],
+        queryKey: ['users', scopeUserId, scopeRole, role],
         queryFn: () => userService.getAll(role),
     });
 }
@@ -24,8 +24,9 @@ export function useUpdateUser() {
     return useMutation({
         mutationFn: ({ id, data }: { id: number; data: Parameters<typeof userService.update>[1] }) =>
             userService.update(id, data),
-        onSuccess: () => {
+        onSuccess: (_, { id }) => {
             queryClient.invalidateQueries({ queryKey: ['users'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard', id] });
         },
     });
 }

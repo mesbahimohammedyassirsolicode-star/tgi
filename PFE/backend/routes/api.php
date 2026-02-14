@@ -16,6 +16,9 @@ use App\Http\Controllers\Api\GradesSummaryController;
 use App\Http\Controllers\Api\TimetableController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\HealthController;
+use App\Http\Controllers\Api\FormateurAssignmentController;
+use App\Http\Controllers\DashboardController;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -28,6 +31,21 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function () {
+
+    // ----- No middleware: prove backend is reached -----
+    Route::get('/debug-ping', function () {
+        Log::info('DEBUG debug-ping hit');
+        return response()->json(['ok' => true, 'message' => 'Backend reached', 'ts' => now()->toIso8601String()]);
+    });
+
+    // ----- Auth-only: prove token is sent and Sanctum accepts it -----
+    Route::get('/debug-auth', function (\Illuminate\Http\Request $request) {
+        Log::info('DEBUG debug-auth hit', ['has_user' => (bool) $request->user()]);
+        if (! $request->user()) {
+            return response()->json(['ok' => false, 'message' => 'Not authenticated'], 401);
+        }
+        return response()->json(['ok' => true, 'user_id' => $request->user()->id, 'user_role' => $request->user()->role]);
+    })->middleware('auth:sanctum');
 
     // ----- Health (no auth, no throttle) -----
     Route::get('/health', [HealthController::class, 'index']);
@@ -42,13 +60,13 @@ Route::prefix('v1')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
+        // Single dashboard: backend returns role-specific data
+        Route::get('/dashboard', [DashboardController::class, 'index']);
+
         // Admin / Directeur / Secrétariat (admin = can manage users e.g. create formateur)
         Route::middleware('role:directeur,secretariat,admin')->group(function () {
             Route::apiResource('users', UserController::class);
             Route::get('/feedbacks', [FeedbackController::class, 'index']);
-            
-            // Dashboard Stats
-            Route::get('/dashboard/stats', [\App\Http\Controllers\DashboardController::class, 'index']);
         });
 
         Route::scopeBindings()->group(function () {
@@ -91,6 +109,11 @@ Route::prefix('v1')->group(function () {
             Route::post('/affectations', [AffectationController::class, 'store'])->middleware('role:directeur,secretariat');
             Route::put('/affectations/{affectation}', [AffectationController::class, 'update'])->middleware('role:directeur,secretariat');
             Route::delete('/affectations/{affectation}', [AffectationController::class, 'destroy'])->middleware('role:directeur,secretariat');
+
+            // Formateur assignments (final architecture: separate admin feature)
+            Route::post('/formateur-assignments', [FormateurAssignmentController::class, 'store'])->middleware('role:directeur,secretariat,admin');
+            Route::get('/formateur-assignments/formateurs/{formateur}', [FormateurAssignmentController::class, 'byTeacher'])->middleware('role:directeur,secretariat,admin');
+            Route::get('/formateur-assignments/me', [FormateurAssignmentController::class, 'me'])->middleware('role:formateur');
 
             // Seances (sessions) & Attendances (canonical roll call)
             Route::get('/seances', [AttendanceController::class, 'index']);

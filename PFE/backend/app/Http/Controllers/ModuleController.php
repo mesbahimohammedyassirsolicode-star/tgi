@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Affectation;
 use App\Models\Module;
-use App\Models\SyllabusItem;
 use Illuminate\Http\Request;
 
 class ModuleController extends Controller
@@ -14,11 +14,30 @@ class ModuleController extends Controller
     public function index(Request $request)
     {
         $query = Module::with('filiere');
-        if ($request->user()?->role === 'stagiaire' && $request->user()->stagiaire?->filiere_id) {
-            $query->where('filiere_id', $request->user()->stagiaire->filiere_id);
-        } elseif ($request->has('filiere_id')) {
-            $query->where('filiere_id', $request->filiere_id);
+
+        if ($this->isStudentRole($request->user()?->role)) {
+            [$filiereId, $groupeIds] = $this->resolveStudentScope($request);
+            if ($filiereId === null || $groupeIds->isEmpty()) {
+                return collect([]);
+            }
+
+            $moduleIds = Affectation::query()
+                ->whereIn('groupe_id', $groupeIds)
+                ->pluck('module_id')
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($moduleIds->isEmpty()) {
+                return collect([]);
+            }
+
+            $query->where('filiere_id', $filiereId)
+                ->whereIn('id', $moduleIds);
+        } elseif ($request->filled('filiere_id')) {
+            $query->where('filiere_id', (int) $request->filiere_id);
         }
+
         return $query->get();
     }
 
@@ -44,11 +63,22 @@ class ModuleController extends Controller
      */
     public function show(Request $request, Module $module)
     {
-        if ($request->user()?->role === 'stagiaire' && $request->user()->stagiaire?->filiere_id) {
-            if ($module->filiere_id !== $request->user()->stagiaire->filiere_id) {
-                abort(403, 'Accès refusé à ce module.');
+        if ($this->isStudentRole($request->user()?->role)) {
+            [$filiereId, $groupeIds] = $this->resolveStudentScope($request);
+            if ($filiereId === null || $groupeIds->isEmpty() || (int) $module->filiere_id !== $filiereId) {
+                abort(403, 'Acces refuse a ce module.');
+            }
+
+            $isAssigned = Affectation::query()
+                ->where('module_id', $module->id)
+                ->whereIn('groupe_id', $groupeIds)
+                ->exists();
+
+            if (! $isAssigned) {
+                abort(403, 'Acces refuse a ce module.');
             }
         }
+
         return $module->load(['filiere', 'syllabusItems']);
     }
 
@@ -80,8 +110,24 @@ class ModuleController extends Controller
     }
 
     // --- Syllabus Management ---
-    public function showSyllabus(Module $module)
+    public function showSyllabus(Request $request, Module $module)
     {
+        if ($this->isStudentRole($request->user()?->role)) {
+            [$filiereId, $groupeIds] = $this->resolveStudentScope($request);
+            if ($filiereId === null || $groupeIds->isEmpty() || (int) $module->filiere_id !== $filiereId) {
+                abort(403, 'Acces refuse a ce module.');
+            }
+
+            $isAssigned = Affectation::query()
+                ->where('module_id', $module->id)
+                ->whereIn('groupe_id', $groupeIds)
+                ->exists();
+
+            if (! $isAssigned) {
+                abort(403, 'Acces refuse a ce module.');
+            }
+        }
+
         return $module->syllabusItems()->orderBy('order')->get();
     }
 
@@ -94,12 +140,43 @@ class ModuleController extends Controller
             'items.*.order' => 'required|integer',
         ]);
 
-        // Replace syllabus items (simple approach: delete all and recreate, or sync)
-        // For simplicity in this phase, we'll delete and recreate to ensure order matches
         $module->syllabusItems()->delete();
-        
         $module->syllabusItems()->createMany($validated['items']);
 
         return response()->json(['message' => 'Syllabus updated successfully', 'items' => $module->syllabusItems]);
+    }
+
+    private function isStudentRole(?string $role): bool
+    {
+        return in_array(strtolower((string) $role), ['stagiaire', 'student', 'stagiair'], true);
+    }
+
+    /**
+     * @return array{0:?int,1:\Illuminate\Support\Collection}
+     */
+    private function resolveStudentScope(Request $request): array
+    {
+        $user = $request->user();
+        if (! $user) {
+            return [null, collect()];
+        }
+
+        $user->loadMissing('stagiaire.groupes');
+        $stagiaire = $user->stagiaire;
+        if (! $stagiaire) {
+            return [null, collect()];
+        }
+
+        $filiereId = $stagiaire->getFiliereIdForScope();
+        if ($filiereId === null) {
+            return [null, collect()];
+        }
+
+        $groupeIds = $stagiaire->getGroupeIdsInFiliere($filiereId);
+        if ($groupeIds->isEmpty() && $stagiaire->groupe_id) {
+            $groupeIds = collect([(int) $stagiaire->groupe_id]);
+        }
+
+        return [(int) $filiereId, $groupeIds->map(fn ($id) => (int) $id)->unique()->values()];
     }
 }
