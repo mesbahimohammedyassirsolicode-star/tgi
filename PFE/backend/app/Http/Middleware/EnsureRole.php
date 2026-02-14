@@ -28,6 +28,10 @@ class EnsureRole
         if ($slugFromRole && in_array($slugFromRole, $roles)) {
             return $next($request);
         }
+        // Allow user.role === 'admin' when route explicitly allows 'admin' (e.g. users management)
+        if ($user->role === 'admin' && in_array('admin', $roles)) {
+            return $next($request);
+        }
         return response()->json(['message' => 'Accès refusé.'], 403);
     }
 }

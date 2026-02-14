@@ -17,6 +17,16 @@ class Stagiaire extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function filiere()
+    {
+        return $this->belongsTo(Filiere::class);
+    }
+
+    public function groupe()
+    {
+        return $this->belongsTo(Groupe::class);
+    }
+
     public function parent()
     {
         return $this->belongsTo(StudentParent::class, 'parent_id');

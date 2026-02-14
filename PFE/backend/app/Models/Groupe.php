@@ -28,4 +28,9 @@ class Groupe extends Model
         return $this->belongsToMany(Stagiaire::class, 'groupe_stagiaire')
                     ->withTimestamps();
     }
+
+    public function seances()
+    {
+        return $this->hasMany(Seance::class, 'groupe_id');
+    }
 }

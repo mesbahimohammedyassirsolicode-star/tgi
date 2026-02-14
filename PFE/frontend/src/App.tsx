@@ -46,39 +46,40 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/*"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <Routes>
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/users" element={<UsersPage />} />
-                <Route path="/academic/years" element={<AcademicYearsPage />} />
-                <Route path="/academic/filieres" element={<FilieresPage />} />
-                <Route path="/groups" element={<GroupsPage />} />
-                <Route path="/groups/:id" element={<GroupDetailPage />} />
-                <Route path="/groups/:id/attendance-summary" element={<GroupAttendanceRiskPage />} />
-                <Route path="/timetable" element={<TimetablePage />} />
-                <Route path="/affectations/:id/grades" element={<AffectationGradesPage />} />
-                <Route path="/progress" element={<ProgressPage />} />
-                <Route path="/modules" element={<ModulesPage />} />
-                <Route path="/affectations" element={<AffectationsPage />} />
-                <Route path="/attendance" element={<AttendancePage />} />
-                <Route path="/attendance/seances/:id" element={<SeanceRollCallPage />} />
-                <Route path="/evaluations" element={<EvaluationsPage />} />
-                <Route path="/stages" element={<StagesPage />} />
-                <Route path="/feedback" element={<FeedbackPage />} />
-                <Route path="/notifications" element={<NotificationsPage />} />
-                <Route path="/parent/children" element={<ParentChildrenPage />} />
-                <Route path="/parent/children/:id" element={<ParentChildDetailPage />} />
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              </Routes>
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
+
+      {/* Protected Routes */}
+      <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+        {/* Admin only */}
+        <Route path="/users" element={<UsersPage />} />
+        <Route path="/academic/years" element={<AcademicYearsPage />} />
+        <Route path="/academic/filieres" element={<FilieresPage />} />
+
+        {/* General */}
+        <Route path="/groups" element={<GroupsPage />} />
+        <Route path="/groups/:id" element={<GroupDetailPage />} />
+        <Route path="/groups/:id/attendance-summary" element={<GroupAttendanceRiskPage />} />
+        <Route path="/timetable" element={<TimetablePage />} />
+        <Route path="/progress" element={<ProgressPage />} />
+        <Route path="/modules" element={<ModulesPage />} />
+        <Route path="/affectations" element={<AffectationsPage />} />
+        <Route path="/affectations/:id/grades" element={<AffectationGradesPage />} />
+        <Route path="/attendance" element={<AttendancePage />} />
+        <Route path="/attendance/seances/:id" element={<SeanceRollCallPage />} />
+        <Route path="/evaluations" element={<EvaluationsPage />} />
+        <Route path="/stages" element={<StagesPage />} />
+        <Route path="/feedback" element={<FeedbackPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+
+        {/* Parent only */}
+        <Route path="/parent/children" element={<ParentChildrenPage />} />
+        <Route path="/parent/children/:id" element={<ParentChildDetailPage />} />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Route>
     </Routes>
   );
 }

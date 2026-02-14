@@ -2,47 +2,132 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\Groupe;
 use App\Models\Seance;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 /**
- * Timetable: weekly view of seances by groupe or by formateur.
+ * Timetable (emploi du temps): weekly seances.
+ * Seances must have affectation_id. Stagiaire: filière + groupe(s). Date filter applied after scope.
  */
 class TimetableController extends BaseApiController
 {
+    private function emptyPayload(Carbon $start, Carbon $end): array
+    {
+        return [
+            'week_start' => $start->format('Y-m-d'),
+            'week_end' => $end->format('Y-m-d'),
+            'seances' => [],
+            'by_date' => (object) [],
+        ];
+    }
+
     /**
-     * GET /timetable
-     * Query: groupe_id (optional), formateur_id (optional), week_start (Y-m-d, default this week Monday).
-     * Returns seances grouped by date for the week (Mon–Sun).
+     * GET /timetable or /emploi-du-temps
+     * Query: week_start (Y-m-d). Always returns JSON with week_start, week_end, seances, by_date.
      */
     public function index(Request $request)
     {
-        $weekStart = $request->get('week_start');
-        $date = $weekStart ? Carbon::parse($weekStart) : Carbon::now()->startOfWeek(Carbon::MONDAY);
-        $start = $date->copy()->startOfDay();
-        $end = $date->copy()->addDays(6)->endOfDay();
+        try {
+            $weekStart = $request->get('week_start');
+            $date = $weekStart ? Carbon::parse($weekStart) : Carbon::now()->startOfWeek(Carbon::MONDAY);
+            $start = $date->copy()->startOfDay();
+            $end = $date->copy()->addDays(6)->endOfDay();
+        } catch (\Throwable) {
+            $start = Carbon::now()->startOfWeek(Carbon::MONDAY)->startOfDay();
+            $end = $start->copy()->addDays(6)->endOfDay();
+            return $this->success($this->emptyPayload($start, $end));
+        }
 
-        $query = Seance::with(['affectation.module', 'affectation.groupe', 'affectation.formateur.user'])
-            ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+        $user = $request->user();
+        if (! $user) {
+            return $this->success($this->emptyPayload($start, $end));
+        }
+
+        // Base: only seances with mandatory affectation_id; load relations
+        $query = Seance::query()
+            ->with(['affectation.module', 'affectation.groupe', 'affectation.formateur.user', 'filiere', 'groupe'])
+            ->whereNotNull('affectation_id')
             ->orderBy('date')
             ->orderBy('start_time');
 
-        if ($request->filled('groupe_id')) {
-            $query->whereHas('affectation', fn ($q) => $q->where('groupe_id', $request->groupe_id));
-        }
-        if ($request->filled('formateur_id')) {
-            $query->whereHas('affectation', fn ($q) => $q->where('formateur_id', $request->formateur_id));
+        if ($user->role === 'stagiaire') {
+            $user->loadMissing('stagiaire.groupes');
+            $stagiaire = $user->stagiaire;
+            if (! $stagiaire || ! $stagiaire->filiere_id) {
+                return $this->success($this->emptyPayload($start, $end));
+            }
+            $groupeIds = $stagiaire->groupes()->pluck('groupes.id')->filter()->values();
+            if ($groupeIds->isEmpty() && $stagiaire->groupe_id) {
+                $groupeIds = collect([$stagiaire->groupe_id]);
+            }
+
+            $query->where(function ($q) use ($stagiaire, $groupeIds) {
+                $q->where('seances.filiere_id', $stagiaire->filiere_id);
+                if ($groupeIds->isNotEmpty()) {
+                    $q->where(function ($q2) use ($groupeIds) {
+                        $q2->whereIn('seances.groupe_id', $groupeIds)
+                            ->orWhereHas('affectation', fn ($a) => $a->whereIn('groupe_id', $groupeIds));
+                    });
+                }
+            });
+        } else {
+            if ($request->filled('groupe_id')) {
+                $query->where(function ($q) use ($request) {
+                    $gid = (int) $request->groupe_id;
+                    $q->where('seances.groupe_id', $gid)
+                        ->orWhereHas('affectation', fn ($a) => $a->where('groupe_id', $gid));
+                });
+            }
+            if ($request->filled('formateur_id')) {
+                $query->whereHas('affectation', fn ($q) => $q->where('formateur_id', $request->formateur_id));
+            }
         }
 
-        $seances = $query->get();
-        $byDate = $seances->groupBy('date')->map(fn ($items) => $items->values()->all())->toArray();
+        try {
+            $allForScope = (clone $query)->get();
+        } catch (\Throwable) {
+            return $this->success($this->emptyPayload($start, $end));
+        }
+
+        $startStr = $start->format('Y-m-d');
+        $endStr = $end->format('Y-m-d');
+
+        $seancesForWeek = $allForScope->filter(function ($s) use ($startStr, $endStr) {
+            $d = $s->date;
+            if (is_object($d)) {
+                $d = $d->format('Y-m-d');
+            }
+            return $d >= $startStr && $d <= $endStr;
+        });
+
+        if ($user->role === 'stagiaire' && $seancesForWeek->isEmpty() && $allForScope->isNotEmpty()) {
+            $firstDate = $allForScope->min('date');
+            if ($firstDate) {
+                $d = is_object($firstDate) ? Carbon::parse($firstDate) : Carbon::parse($firstDate);
+                $start = $d->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+                $end = $start->copy()->addDays(6)->endOfDay();
+                $startStr = $start->format('Y-m-d');
+                $endStr = $end->format('Y-m-d');
+                $seancesForWeek = $allForScope->filter(function ($s) use ($startStr, $endStr) {
+                    $d = $s->date;
+                    if (is_object($d)) {
+                        $d = $d->format('Y-m-d');
+                    }
+                    return $d >= $startStr && $d <= $endStr;
+                });
+            }
+        }
+
+        $byDate = $seancesForWeek->groupBy(function ($s) {
+            $d = $s->date;
+            return is_object($d) ? $d->format('Y-m-d') : (string) $d;
+        })->map(fn ($items) => $items->values()->all())->toArray();
 
         return $this->success([
             'week_start' => $start->format('Y-m-d'),
             'week_end' => $end->format('Y-m-d'),
-            'seances' => $seances->values()->all(),
+            'seances' => $seancesForWeek->values()->all(),
             'by_date' => $byDate,
         ]);
     }

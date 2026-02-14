@@ -14,10 +14,16 @@ export interface Formateur {
 
 export interface Stagiaire {
     id: number;
+    filiere_id: number;
+    groupe_id?: number;
     cef_number: string;
     date_naissance: string;
     status: 'actif' | 'abandon' | 'exclu' | 'diplome';
     parent_id?: number;
+    filiere?: { id: number; code: string; label: string };
+    groupe?: { id: number; label: string };
+    niveau_formation?: string;
+    niveau_scolaire?: string;
 }
 
 export interface Parent {

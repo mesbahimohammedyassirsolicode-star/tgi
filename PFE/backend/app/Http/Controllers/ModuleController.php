@@ -14,7 +14,9 @@ class ModuleController extends Controller
     public function index(Request $request)
     {
         $query = Module::with('filiere');
-        if ($request->has('filiere_id')) {
+        if ($request->user()?->role === 'stagiaire' && $request->user()->stagiaire?->filiere_id) {
+            $query->where('filiere_id', $request->user()->stagiaire->filiere_id);
+        } elseif ($request->has('filiere_id')) {
             $query->where('filiere_id', $request->filiere_id);
         }
         return $query->get();
@@ -40,8 +42,13 @@ class ModuleController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Module $module)
+    public function show(Request $request, Module $module)
     {
+        if ($request->user()?->role === 'stagiaire' && $request->user()->stagiaire?->filiere_id) {
+            if ($module->filiere_id !== $request->user()->stagiaire->filiere_id) {
+                abort(403, 'Accès refusé à ce module.');
+            }
+        }
         return $module->load(['filiere', 'syllabusItems']);
     }
 

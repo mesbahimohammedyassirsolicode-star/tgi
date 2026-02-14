@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { groupsApi } from '../services/api/groups';
@@ -9,13 +10,17 @@ import { toast } from 'sonner';
 export default function GroupDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const groupId = id ? parseInt(id, 10) : NaN;
+  const isValidId = !isNaN(groupId) && groupId > 0;
   const { data, isLoading, error } = useQuery({
-    queryKey: ['groups', id],
-    queryFn: () => groupsApi.get(Number(id)),
-    enabled: !!id,
+    queryKey: ['groups', groupId],
+    queryFn: () => groupsApi.get(groupId),
+    enabled: isValidId,
   });
 
-  if (error) toast.error('Erreur chargement du groupe');
+  useEffect(() => {
+    if (error) toast.error('Erreur chargement du groupe');
+  }, [error]);
 
   return (
     <div className="space-y-6">
@@ -24,6 +29,10 @@ export default function GroupDetailPage() {
       </Button>
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary-600" /></div>
+      ) : !isValidId ? (
+        <p className="text-gray-500">ID de groupe invalide.</p>
+      ) : error ? (
+        <p className="text-gray-500">Impossible de charger le groupe.</p>
       ) : data ? (
         <Card>
           <CardHeader>
@@ -31,7 +40,7 @@ export default function GroupDetailPage() {
           </CardHeader>
           <CardContent className="text-sm text-gray-600">
             <p>Filière : {data.filiere?.label}</p>
-            <p>Année : {data.annee_scolaire?.label}</p>
+            <p>Année : {data.annee_scolaire?.label ?? data.anneeScolaire?.label}</p>
             <p>Capacité : {data.capacity}</p>
             {data.stagiaires && <p>Inscrits : {data.stagiaires.length}</p>}
             <Button size="sm" className="mt-2" onClick={() => navigate(`/groups/${data.id}/attendance-summary`)}>

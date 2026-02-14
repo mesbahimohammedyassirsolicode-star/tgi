@@ -11,20 +11,25 @@ use Illuminate\Support\Str;
  */
 class UserFactory extends Factory
 {
-    /**
-     * The current password being used by the factory.
-     */
     protected static ?string $password;
 
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
+    protected static array $prenoms = [
+        'Ahmed', 'Mohammed', 'Omar', 'Youssef', 'Karim', 'Fatima', 'Aicha', 'Laila',
+        'Nadia', 'Mehdi', 'Anas', 'Salma', 'Sara', 'Amine', 'Yassine', 'Adil',
+    ];
+
+    protected static array $noms = [
+        'Alami', 'Benali', 'Tazi', 'Idrissi', 'El Amrani', 'Bennani', 'Ouazzani',
+        'Boussaid', 'Chaoui', 'El Khatib', 'Lamrani', 'Berrada', 'Mansouri',
+    ];
+
     public function definition(): array
     {
+        $prenom = self::$prenoms[array_rand(self::$prenoms)];
+        $nom = self::$noms[array_rand(self::$noms)];
+
         return [
-            'name' => fake()->name(),
+            'name' => "{$prenom} {$nom}",
             'email' => fake()->unique()->safeEmail(),
             'password' => static::$password ??= Hash::make('password'),
             'role' => 'stagiaire',
@@ -32,5 +37,4 @@ class UserFactory extends Factory
             'remember_token' => Str::random(10),
         ];
     }
-
-    }
+}

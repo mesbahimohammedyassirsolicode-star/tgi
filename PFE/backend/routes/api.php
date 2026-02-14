@@ -42,10 +42,13 @@ Route::prefix('v1')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
-        // Admin / Directeur / Secrétariat
-        Route::middleware('role:directeur,secretariat')->group(function () {
+        // Admin / Directeur / Secrétariat (admin = can manage users e.g. create formateur)
+        Route::middleware('role:directeur,secretariat,admin')->group(function () {
             Route::apiResource('users', UserController::class);
             Route::get('/feedbacks', [FeedbackController::class, 'index']);
+            
+            // Dashboard Stats
+            Route::get('/dashboard/stats', [\App\Http\Controllers\DashboardController::class, 'index']);
         });
 
         Route::scopeBindings()->group(function () {
@@ -64,8 +67,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/academic-structure/levels', [AcademicStructureController::class, 'indexLevels']);
             Route::get('/academic-structure/niveaux', [AcademicStructureController::class, 'indexLevels']); // alias
 
-            // Groups (admin + formateur for own)
+            // Groups (admin + formateur for own). GET /groups or /groupes?filiere_id=ID
             Route::get('/groups', [GroupController::class, 'index']);
+            Route::get('/groupes', [GroupController::class, 'index']);
             Route::get('/groups/{group}', [GroupController::class, 'show']);
             Route::post('/groups', [GroupController::class, 'store'])->middleware('role:directeur,secretariat');
             Route::put('/groups/{group}', [GroupController::class, 'update'])->middleware('role:directeur,secretariat');
@@ -108,8 +112,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/affectations/{affectation}/grades-summary', [GradesSummaryController::class, 'summaryByAffectation']);
             Route::get('/stagiaires/{stagiaire}/grades-summary', [GradesSummaryController::class, 'summaryByStagiaire']);
 
-            // Timetable (Phase 4): weekly view
+            // Timetable (Phase 4): weekly view — stagiaire sees only own filière/groupe
             Route::get('/timetable', [TimetableController::class, 'index']);
+            Route::get('/emploi-du-temps', [TimetableController::class, 'index']);
 
             // Progress / Gamification (Phase 4): syllabus completion %
             Route::get('/stagiaires/{stagiaire}/progress', [ProgressController::class, 'index']);

@@ -13,6 +13,9 @@ class EvaluationController extends Controller
     public function index(Request $request)
     {
         $query = Evaluation::with(['affectation.module', 'affectation.groupe']);
+        if ($request->user()?->role === 'stagiaire' && $request->user()->stagiaire?->filiere_id) {
+            $query->whereHas('affectation.groupe', fn ($q) => $q->where('filiere_id', $request->user()->stagiaire->filiere_id));
+        }
         if ($request->has('affectation_id')) {
             $query->where('affectation_id', $request->affectation_id);
         }
@@ -40,9 +43,15 @@ class EvaluationController extends Controller
         return $this->created($evaluation->load('affectation'));
     }
 
-    public function show(Evaluation $evaluation)
+    public function show(Request $request, Evaluation $evaluation)
     {
-        return $this->success($evaluation->load(['notes.stagiaire.user', 'affectation.module']));
+        if ($request->user()?->role === 'stagiaire' && $request->user()->stagiaire?->filiere_id) {
+            $evalFiliereId = $evaluation->affectation?->groupe?->filiere_id;
+            if ($evalFiliereId !== $request->user()->stagiaire->filiere_id) {
+                abort(403, 'Accès refusé à cette évaluation.');
+            }
+        }
+        return $this->success($evaluation->load(['notes.stagiaire.user', 'affectation.module', 'affectation.groupe']));
     }
 
     public function update(Request $request, Evaluation $evaluation)

@@ -26,4 +26,14 @@ class Filiere extends Model
     {
         return $this->hasMany(Module::class);
     }
+
+    public function stagiaires()
+    {
+        return $this->hasMany(Stagiaire::class);
+    }
+
+    public function seances()
+    {
+        return $this->hasMany(Seance::class);
+    }
 }

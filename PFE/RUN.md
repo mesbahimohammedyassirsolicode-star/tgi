@@ -57,7 +57,40 @@ php artisan migrate
 php artisan db:seed
 ```
 
-This creates roles/permissions and syncs user roles. If you need a user to log in, create one (e.g. via tinker or a seeder):
+This creates roles/permissions, demo data, **TSGE 1A**, **TGI 2A**, **TSGMP 1A**, **TSGTL 1A**, **TSDI 2A**, **TSGQ 2A**, **BEGI 1A**, **BEMRH 1A**, **BEQSE 1A**, **BETL 1A**, **METL 1A**, **MEGIQ 1A**, and **MGRH 1A** timetables. After seeding, you should see these groups in the list (e.g. on the Emploi du temps page).
+
+If you already ran `db:seed` before and don’t see TSGE, run a timetable seeder:
+
+```bash
+php artisan db:seed --class=Tsge1ATimetableSeeder
+php artisan db:seed --class=Tgi2ATimetableSeeder
+php artisan db:seed --class=Tsgmp1ATimetableSeeder
+php artisan db:seed --class=Tsgtl1ATimetableSeeder
+php artisan db:seed --class=Tsdi2ATimetableSeeder
+php artisan db:seed --class=Tsgq2ATimetableSeeder
+php artisan db:seed --class=Begi1ATimetableSeeder
+php artisan db:seed --class=Bemrh1ATimetableSeeder
+php artisan db:seed --class=Beqse1ATimetableSeeder
+php artisan db:seed --class=Betl1ATimetableSeeder
+php artisan db:seed --class=Metl1ATimetableSeeder
+php artisan db:seed --class=Megiq1ATimetableSeeder
+php artisan db:seed --class=Mgrh1ATimetableSeeder
+php artisan db:seed --class=MoroccanStagiairesSeeder
+```
+
+**CIN & Moroccan names:** Stagiaires require a mandatory, unique CIN (format: 2 letters + 6 digits, e.g. AB123456). Run the migration, then add students via the Users form. To replace existing Western names with Moroccan names, run `MoroccanStagiairesSeeder` (adds demo stagiaires with realistic names) or manually update via the app.
+
+**Eligibilité (Type de formation vs Niveau scolaire):**
+
+| Type de formation (visée) | Niveau scolaire minimum requis |
+|---------------------------|-------------------------------|
+| Qualification             | Collège                       |
+| Technicien                | Baccalauréat                  |
+| Technicien Spécialisé     | Baccalauréat                  |
+| Bachelor                  | Bac+2                         |
+| Master                    | Bac+3                         |
+
+Then open **Emploi du temps**, choose a group (TSGE-1A, TGI-2A, TSGMP-1A, TSGTL-1A, TSDI-2A, TSGQ-2A, BEGI-1A, BEMRH-1A, BEQSE-1A, BETL-1A, METL-1A, MEGIQ-1A, MGRH-1A) and a week to see the grid (module, formateur, salle). If you need a user to log in, create one (e.g. via tinker or a seeder):
 
 ```bash
 php artisan tinker

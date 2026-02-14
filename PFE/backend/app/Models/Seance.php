@@ -17,6 +17,16 @@ class Seance extends Model
         return $this->belongsTo(Affectation::class);
     }
 
+    public function filiere()
+    {
+        return $this->belongsTo(Filiere::class);
+    }
+
+    public function groupe()
+    {
+        return $this->belongsTo(Groupe::class);
+    }
+
     public function absences()
     {
         return $this->hasMany(Absence::class);

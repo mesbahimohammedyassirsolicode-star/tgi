@@ -19,6 +19,17 @@ export function useCreateUser() {
     });
 }
 
+export function useUpdateUser() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }: { id: number; data: Parameters<typeof userService.update>[1] }) =>
+            userService.update(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+        },
+    });
+}
+
 export function useDeleteUser() {
     const queryClient = useQueryClient();
     return useMutation({

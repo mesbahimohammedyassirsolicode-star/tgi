@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import {
@@ -24,9 +24,9 @@ const navItems: { label: string; icon: typeof Home; href: string; roles?: string
   { label: 'Filières', icon: BookOpen, href: '/academic/filieres', roles: ['admin'] },
   { label: 'Groupes', icon: Users, href: '/groups' },
   { label: 'Modules', icon: BookOpen, href: '/modules' },
-  { label: 'Affectations', icon: ClipboardList, href: '/affectations' },
+  { label: 'Affectations', icon: ClipboardList, href: '/affectations', roles: ['admin', 'formateur'] },
   { label: 'Présences', icon: ClipboardList, href: '/attendance' },
-  { label: 'Emploi du temps', icon: Calendar, href: '/timetable' },
+  { label: 'Emploi du temps', icon: Calendar, href: '/timetable', roles: ['admin', 'formateur', 'stagiaire'] },
   { label: 'Progression', icon: BarChart, href: '/progress' },
   { label: 'Évaluations', icon: BarChart, href: '/evaluations' },
   { label: 'Stages', icon: Briefcase, href: '/stages' },
@@ -35,7 +35,7 @@ const navItems: { label: string; icon: typeof Home; href: string; roles?: string
   { label: 'Mes enfants', icon: UserCircle, href: '/parent/children', roles: ['parent'] },
 ];
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -108,7 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <LogOut className="w-4 h-4" />
           </Button>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6"><Outlet /></main>
       </div>
     </div>
   );

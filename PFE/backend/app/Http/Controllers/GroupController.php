@@ -12,19 +12,34 @@ class GroupController extends Controller
 {
     /**
      * Display a listing of the resource.
+     * GET /groups?filiere_id=&year_id=&per_page=
+     * Returns { data: Groupe[], meta: { total, current_page, last_page, per_page } }.
+     * Groups are from groupes table only (not inferred from users).
      */
     public function index(Request $request)
     {
         $query = Groupe::with(['filiere', 'anneeScolaire']);
-        if ($request->has('filiere_id')) {
-            $query->where('filiere_id', $request->filiere_id);
+
+        if ($request->user()?->role === 'stagiaire') {
+            $request->user()->loadMissing('stagiaire');
+            $filiereId = $request->user()->stagiaire?->filiere_id;
+            if ($filiereId) {
+                $query->where('filiere_id', $filiereId);
+            }
+        } elseif ($request->filled('filiere_id')) {
+            $query->where('filiere_id', (int) $request->filiere_id);
         }
-        if ($request->has('year_id')) {
-            $query->where('annee_scolaire_id', $request->year_id);
+
+        if ($request->filled('year_id')) {
+            $query->where('annee_scolaire_id', (int) $request->year_id);
         }
-        $perPage = min((int) $request->get('per_page', 15), 50);
+
+        $perPage = min((int) $request->get('per_page', 50), 100);
         $paginator = $query->orderBy('label')->paginate($perPage);
-        return $this->success($paginator->items(), [
+        $items = $paginator->items();
+        $list = is_array($items) ? $items : collect($items)->values()->all();
+
+        return $this->success($list, [
             'current_page' => $paginator->currentPage(),
             'last_page' => $paginator->lastPage(),
             'per_page' => $paginator->perPage(),
@@ -49,8 +64,13 @@ class GroupController extends Controller
         return $this->created($group->load(['filiere', 'anneeScolaire']));
     }
 
-    public function show(Groupe $group)
+    public function show(Request $request, Groupe $group)
     {
+        if ($request->user()?->role === 'stagiaire' && $request->user()->stagiaire?->filiere_id) {
+            if ($group->filiere_id !== $request->user()->stagiaire->filiere_id) {
+                abort(403, 'Accès refusé à ce groupe.');
+            }
+        }
         return $this->success($group->load(['filiere', 'anneeScolaire', 'stagiaires.user']));
     }
 

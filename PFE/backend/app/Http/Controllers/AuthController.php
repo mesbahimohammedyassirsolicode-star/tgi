@@ -64,7 +64,7 @@ class AuthController extends Controller
         match ($user->role) {
             'admin' => $user->load('administrator'),
             'formateur' => $user->load('formateur'),
-            'stagiaire' => $user->load('stagiaire'),
+            'stagiaire' => $user->load('stagiaire.filiere', 'stagiaire.groupe'),
             'parent' => $user->load('parent'),
             default => null,
         };
